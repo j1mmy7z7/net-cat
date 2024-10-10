@@ -1,28 +1,38 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"net"
+	"strings"
+	"sync"
 )
+
+type Client struct {
+	conn net.Conn
+	name string
+}
 
 type Message struct {
 	from    string
-	payload []byte
+	payload net.Conn
 }
 
 type Server struct {
 	listenAddr string
-	ln         net.Listener
-	quitch     chan struct{}
+	listen         net.Listener
+	users     chan struct{}
+	userMutex sync.Mutex
 	msgch      chan Message
+	prevMessages []string
 	// peerMap map[net.Addr]
 }
 
 func NewServer(listenAddr string) *Server {
 	return &Server{
 		listenAddr: listenAddr,
-		quitch:     make(chan struct{}),
+		users:     make(chan struct{}),
 		msgch:      make(chan Message, 10),
 	}
 }
@@ -33,20 +43,18 @@ func (s *Server) Start() error {
 		return err
 	}
 	defer ln.Close()
-	s.ln = ln
-
-	go s.acceptLoop()
-
-	<-s.quitch
-	close(s.msgch)
-
-	fmt.Println(s.listenAddr)
+	s.listen = ln
+	fmt.Printf("Listening on port %s\n", s.listenAddr)
+	go s.hanleMessage()
+	s.acceptConnections()
+	<-s.prevMessages
+	
 	return nil
 }
 
 func (s *Server) acceptLoop() {
 	for {
-		conn, err := s.ln.Accept()
+		conn, err := s.listen.Accept()
 		if err != nil {
 			fmt.Println("Accept error:", err)
 			continue
@@ -63,7 +71,7 @@ func (s *Server) readLoop(conn net.Conn) {
 		n, err := conn.Read(buf)
 		if err != nil {
 			fmt.Println("read error:", err)
-			continue
+			break
 		}
 
 		// conn.Write([]byte("Thanks for chatting!"))//everytime to the terminal of the user
@@ -84,4 +92,43 @@ func main() {
 		}
 	}()
 	log.Fatal(server.Start())
+}
+
+func (s *Server) getUserName(conn net.Conn) string {
+	conn.Write([]byte("Enter your name:"))
+	scanner := bufio.NewReader(conn)
+	name, err := scanner.ReadString('\n')
+	if err != nil || strings.TrimSpace(name) == "" {
+		conn.Close()
+		return ""
+	}
+	name = strings.TrimSpace(name)
+	s.userMutex.Lock()
+	s.users[conn] = Client{conn, name}
+	s.userMutex.Unlock()
+
+	s.notifyClients(fmt.Sprintf("%s has left the group", name), conn)
+	return name
+}
+
+func (s *Server) previousMessages(conn net.Conn) {
+	s.userMutex.Lock()
+	for _, message := range s.prevMessages {
+		conn.Write(([]byte(message + "\n")))
+	}
+	s.userMutex.Unlock()
+}
+
+
+func (s *Server) handleMess(){
+	for message := range s.msgch {
+		s.prevMessages = append(s.prevMessages, message.from)
+		s.userMutex.Lock()
+		formattedMessage, senderConn := message.from, message.payload
+		for conn, client := range s.users {
+			if conn !=  {
+				client.conn.Write([]byte(formattedMessage + "\n"))
+			}
+		}
+	}
 }
