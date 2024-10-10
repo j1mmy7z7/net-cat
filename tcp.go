@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"time"
+	//"strings"
 )
 
-type Message struct {
+type Quit struct {
 	from    string
 	payload []byte
 }
@@ -14,16 +16,16 @@ type Message struct {
 type Server struct {
 	listenAddr string
 	ln         net.Listener
-	quitch     chan struct{}
-	msgch      chan Message
-	// peerMap map[net.Addr]
+	quitch     chan Quit
+	msgch      chan string
+	chat map[string]net.Conn
 }
 
 func NewServer(listenAddr string) *Server {
 	return &Server{
 		listenAddr: listenAddr,
-		quitch:     make(chan struct{}),
-		msgch:      make(chan Message, 10),
+		quitch:     make(chan Quit),
+		msgch:      make(chan string, 10),
 	}
 }
 
@@ -51,27 +53,50 @@ func (s *Server) acceptLoop() {
 			fmt.Println("Accept error:", err)
 			continue
 		}
-		fmt.Println("New connection to server", conn.RemoteAddr())
-		go s.readLoop(conn)
+		name := Welcome(conn, s)
+		go s.readLoop(conn, name)
 	}
 }
 
-func (s *Server) readLoop(conn net.Conn) {
+func Welcome(conn net.Conn, s *Server) string{
+	buf := make([]byte, 15)
+	penguin := `Welcome to TCP-Chat!
+         _nnnn_
+        dGGGGMMb
+       @p~qp~~qMb
+       M|@||@) M|
+       @,----.JM|
+      JS^\__/  qKL
+     dZP        qKRb
+    dZP          qKKb
+   fZP            SMMb
+   HZM            MMMM
+   FqM            MMMM
+ __| ".        |\dS"qML
+ |    ` + "`" + `.       | ` + "`" + `' \Zq
+_)      \.___.,|     .'
+\____   )MMMMMP|   .'
+     ` + "`" + `-'       ` + "`" + `--'`
+	fmt.Fprintf(conn, penguin + "\n")
+	fmt.Fprintf(conn, "[ENTER YOUR NAME]: ")
+	name, _ := conn.Read(buf)
+	user := buf[:name]
+	user = user[:len(user) -1]
+	s.msgch <- fmt.Sprintf("%s has joined the chat\n", user)
+	return string(user)
+}
+
+func (s *Server) readLoop(conn net.Conn, user string) {
 	defer conn.Close()
 	buf := make([]byte, 2048)
 	for {
 		n, err := conn.Read(buf)
 		if err != nil {
-			fmt.Println("read error:", err)
-			continue
+			s.msgch <- fmt.Sprintf("%s has left the chat\n", user)
+			break
 		}
-
-		// conn.Write([]byte("Thanks for chatting!"))//everytime to the terminal of the user
-
-		s.msgch <- Message{
-			from:    conn.RemoteAddr().String(),
-			payload: buf[:n],
-		}
+		now := time.Now()
+		s.msgch <- fmt.Sprintf("[%s][%s] %s", now.Format("2006-01-02 15:04:05"), user, string(buf[:n])) 
 	}
 }
 
@@ -80,7 +105,7 @@ func main() {
 
 	go func() {
 		for msg := range server.msgch {
-			fmt.Printf("Receive message from connection (%s):%s", msg.from, string(msg.payload))
+			fmt.Print(msg)
 		}
 	}()
 	log.Fatal(server.Start())
