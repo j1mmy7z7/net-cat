@@ -26,6 +26,7 @@ func NewServer(listenAddr string) *Server {
 		listenAddr: listenAddr,
 		quitch:     make(chan Quit),
 		msgch:      make(chan string, 10),
+		chat:		make(map[string]net.Conn),
 	}
 }
 
@@ -53,8 +54,11 @@ func (s *Server) acceptLoop() {
 			fmt.Println("Accept error:", err)
 			continue
 		}
-		name := Welcome(conn, s)
-		go s.readLoop(conn, name)
+		fmt.Print(s.chat)
+		go func(conn net.Conn) {
+			name := Welcome(conn, s)
+			s.readLoop(conn, name)
+		}(conn)
 	}
 }
 
@@ -83,6 +87,7 @@ _)      \.___.,|     .'
 	user := buf[:name]
 	user = user[:len(user) -1]
 	s.msgch <- fmt.Sprintf("%s has joined the chat\n", user)
+	s.chat[string(user)] = conn
 	return string(user)
 }
 
