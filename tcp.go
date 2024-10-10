@@ -6,6 +6,7 @@ import (
 	"net"
 	"time"
 	//"strings"
+	"sync"
 )
 
 type Quit struct {
@@ -18,7 +19,10 @@ type Server struct {
 	ln         net.Listener
 	quitch     chan Quit
 	msgch      chan string
+	quit       chan string
 	chat map[string]net.Conn
+	text  		[]string
+	mu 			sync.Mutex
 }
 
 func NewServer(listenAddr string) *Server {
@@ -27,6 +31,9 @@ func NewServer(listenAddr string) *Server {
 		quitch:     make(chan Quit),
 		msgch:      make(chan string, 10),
 		chat:		make(map[string]net.Conn),
+		quit:       make(chan string, 10),
+		text:       make([]string, 0),
+		mu: 		sync.Mutex{},		
 	}
 }
 
@@ -50,20 +57,55 @@ func (s *Server) Start() error {
 func (s *Server) acceptLoop() {
 	for {
 		conn, err := s.ln.Accept()
+		defer conn.Close()
 		if err != nil {
 			fmt.Println("Accept error:", err)
 			continue
 		}
-		fmt.Print(s.chat)
-		go func(conn net.Conn) {
-			name := Welcome(conn, s)
-			s.readLoop(conn, name)
-		}(conn)
+		if len(s.chat) < 10 {
+			go func(conn net.Conn) {
+				name , err := Welcome(conn, s)
+				if err != nil {
+					conn.Write([]byte("An error occured while setting you up"))
+					fmt.Println(err)
+					return
+				}
+				s.mu.Lock() 
+				collect(s)
+				update(s, conn)
+				s.mu.Unlock()
+				s.readLoop(conn, name)
+				remove(s)
+			}(conn)
+		} else {
+			conn.Write([]byte("The chat is full try another time"))
+			conn.Close()
+		}
 	}
 }
 
-func Welcome(conn net.Conn, s *Server) string{
-	buf := make([]byte, 15)
+func remove(s *Server) {
+	for name :=  range s.quit {
+		delete(s.chat, name)
+	}
+
+}
+
+func collect(s *Server) {
+	for msg := range s.msgch {
+		s.text = append(s.text, msg)
+	}
+}
+
+func update(s *Server,  conn net.Conn) {
+	for _, value := range s.text {
+		conn.Write([]byte(value))
+	}
+}
+
+
+func Welcome(conn net.Conn, s *Server) (string, error) {
+	buf := make([]byte, 256)
 	penguin := `Welcome to TCP-Chat!
          _nnnn_
         dGGGGMMb
@@ -83,12 +125,15 @@ _)      \.___.,|     .'
      ` + "`" + `-'       ` + "`" + `--'`
 	fmt.Fprintf(conn, penguin + "\n")
 	fmt.Fprintf(conn, "[ENTER YOUR NAME]: ")
-	name, _ := conn.Read(buf)
+	name, err := conn.Read(buf)
+	if err != nil {
+		return "", err
+	}
 	user := buf[:name]
 	user = user[:len(user) -1]
 	s.msgch <- fmt.Sprintf("%s has joined the chat\n", user)
 	s.chat[string(user)] = conn
-	return string(user)
+	return string(user), nil
 }
 
 func (s *Server) readLoop(conn net.Conn, user string) {
@@ -98,10 +143,11 @@ func (s *Server) readLoop(conn net.Conn, user string) {
 		n, err := conn.Read(buf)
 		if err != nil {
 			s.msgch <- fmt.Sprintf("%s has left the chat\n", user)
+			s.quit <- user
 			break
 		}
 		now := time.Now()
-		s.msgch <- fmt.Sprintf("[%s][%s] %s", now.Format("2006-01-02 15:04:05"), user, string(buf[:n])) 
+		s.msgch <- fmt.Sprintf("[%s][%s]:%s", now.Format("2006-01-02 15:04:05"), user, string(buf[:n])) 
 	}
 }
 
@@ -110,7 +156,11 @@ func main() {
 
 	go func() {
 		for msg := range server.msgch {
-			fmt.Print(msg)
+			server.mu.Lock()
+			for users := range server.chat {
+				server.chat[users].Write([]byte(msg))
+			}
+			server.mu.Unlock()
 		}
 	}()
 	log.Fatal(server.Start())
