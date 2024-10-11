@@ -20,9 +20,9 @@ type Server struct {
 	quitch     chan Quit
 	msgch      chan string
 	quit       chan string
-	chat map[string]net.Conn
-	text  		[]string
-	mu 			sync.Mutex
+	chat       map[string]net.Conn
+	history    []string
+	mu         sync.RWMutex
 }
 
 func NewServer(listenAddr string) *Server {
@@ -30,79 +30,91 @@ func NewServer(listenAddr string) *Server {
 		listenAddr: listenAddr,
 		quitch:     make(chan Quit),
 		msgch:      make(chan string, 10),
-		chat:		make(map[string]net.Conn),
+		chat:       make(map[string]net.Conn),
 		quit:       make(chan string, 10),
-		text:       make([]string, 0),
-		mu: 		sync.Mutex{},		
+		history:    make([]string, 0),
+		mu:         sync.RWMutex{},
 	}
 }
 
-func (s *Server) Start() error {
+func (s *Server) Start() {
 	ln, err := net.Listen("tcp", s.listenAddr)
 	if err != nil {
-		return err
+		return
 	}
 	defer ln.Close()
 	s.ln = ln
 
-	go s.acceptLoop()
+	go s.handlemessages()
 
-	<-s.quitch
-	close(s.msgch)
-
-	fmt.Println(s.listenAddr)
-	return nil
-}
-
-func (s *Server) acceptLoop() {
 	for {
 		conn, err := s.ln.Accept()
-		defer conn.Close()
 		if err != nil {
-			fmt.Println("Accept error:", err)
+			log.Printf("Failed to accept connection: %v", err)
 			continue
 		}
-		if len(s.chat) < 10 {
-			go func(conn net.Conn) {
-				name , err := Welcome(conn, s)
-				if err != nil {
-					conn.Write([]byte("An error occured while setting you up"))
-					fmt.Println(err)
-					return
-				}
-				s.mu.Lock() 
-				collect(s)
-				update(s, conn)
-				s.mu.Unlock()
-				s.readLoop(conn, name)
-				remove(s)
-			}(conn)
-		} else {
-			conn.Write([]byte("The chat is full try another time"))
-			conn.Close()
-		}
+		go s.handleConnection(conn)
 	}
 }
 
-func remove(s *Server) {
-	for name :=  range s.quit {
+func (s *Server) handleConnection(conn net.Conn) {
+	defer conn.Close()
+	if len(s.chat) < 10 {
+		name, err := Welcome(conn, s)
+		if err != nil {
+			conn.Write([]byte("An error occured while setting you up"))
+			fmt.Println(err)
+			return
+		}
+		s.update(conn)
+		s.readLoop(conn, name)
+		s.mu.Lock()
+		s.removeclient()
+		s.mu.Unlock()
+	} else {
+		conn.Write([]byte("The chat is full try another time"))
+		conn.Close()
+	}
+}
+
+func (s *Server) handlemessages() {
+	for msg := range s.msgch {
+		s.broadcastMessage(msg)
+		s.gethistory(msg)
+	}
+}
+
+func (s *Server) removeclient() {
+	s.mu.Lock()
+	for name := range s.quit {
 		delete(s.chat, name)
 	}
-
+	s.mu.Unlock()
 }
 
-func collect(s *Server) {
-	for msg := range s.msgch {
-		s.text = append(s.text, msg)
+func (s *Server) update(conn net.Conn) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for _, msg := range s.history {
+		conn.Write([]byte(msg))
 	}
 }
 
-func update(s *Server,  conn net.Conn) {
-	for _, value := range s.text {
-		conn.Write([]byte(value))
+func (s *Server) broadcastMessage(msg string) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for key := range s.chat {
+		s.chat[key].Write([]byte(msg))
 	}
 }
 
+func (s *Server) gethistory(msg string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.history = append(s.history, msg)
+}
 
 func Welcome(conn net.Conn, s *Server) (string, error) {
 	buf := make([]byte, 256)
@@ -123,16 +135,18 @@ func Welcome(conn net.Conn, s *Server) (string, error) {
 _)      \.___.,|     .'
 \____   )MMMMMP|   .'
      ` + "`" + `-'       ` + "`" + `--'`
-	fmt.Fprintf(conn, penguin + "\n")
+	fmt.Fprintf(conn, penguin+"\n")
 	fmt.Fprintf(conn, "[ENTER YOUR NAME]: ")
 	name, err := conn.Read(buf)
 	if err != nil {
 		return "", err
 	}
 	user := buf[:name]
-	user = user[:len(user) -1]
-	s.msgch <- fmt.Sprintf("%s has joined the chat\n", user)
+	user = user[:len(user)-1]
+	s.mu.Lock()
 	s.chat[string(user)] = conn
+	s.mu.Unlock()
+	s.msgch <- fmt.Sprintf("%s has joined the chat\n", user)
 	return string(user), nil
 }
 
@@ -147,21 +161,11 @@ func (s *Server) readLoop(conn net.Conn, user string) {
 			break
 		}
 		now := time.Now()
-		s.msgch <- fmt.Sprintf("[%s][%s]:%s", now.Format("2006-01-02 15:04:05"), user, string(buf[:n])) 
+		s.msgch <- fmt.Sprintf("[%s][%s]:%s", now.Format("2006-01-02 15:04:05"), user, string(buf[:n]))
 	}
 }
 
 func main() {
 	server := NewServer(":8081")
-
-	go func() {
-		for msg := range server.msgch {
-			server.mu.Lock()
-			for users := range server.chat {
-				server.chat[users].Write([]byte(msg))
-			}
-			server.mu.Unlock()
-		}
-	}()
-	log.Fatal(server.Start())
+	server.Start()
 }
