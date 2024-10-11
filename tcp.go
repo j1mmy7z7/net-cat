@@ -9,15 +9,9 @@ import (
 	"sync"
 )
 
-type Quit struct {
-	from    string
-	payload []byte
-}
-
 type Server struct {
 	listenAddr string
 	ln         net.Listener
-	quitch     chan Quit
 	msgch      chan string
 	quit       chan string
 	chat       map[string]net.Conn
@@ -28,7 +22,6 @@ type Server struct {
 func NewServer(listenAddr string) *Server {
 	return &Server{
 		listenAddr: listenAddr,
-		quitch:     make(chan Quit),
 		msgch:      make(chan string, 10),
 		chat:       make(map[string]net.Conn),
 		quit:       make(chan string, 10),
