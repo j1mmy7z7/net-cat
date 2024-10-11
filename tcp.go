@@ -63,14 +63,11 @@ func (s *Server) handleConnection(conn net.Conn) {
 		name, err := Welcome(conn, s)
 		if err != nil {
 			conn.Write([]byte("An error occured while setting you up"))
-			fmt.Println(err)
 			return
 		}
 		s.update(conn)
 		s.readLoop(conn, name)
-		s.mu.Lock()
 		s.removeclient()
-		s.mu.Unlock()
 	} else {
 		conn.Write([]byte("The chat is full try another time"))
 		conn.Close()
@@ -85,11 +82,9 @@ func (s *Server) handlemessages() {
 }
 
 func (s *Server) removeclient() {
-	s.mu.Lock()
 	for name := range s.quit {
 		delete(s.chat, name)
 	}
-	s.mu.Unlock()
 }
 
 func (s *Server) update(conn net.Conn) {
@@ -145,6 +140,7 @@ _)      \.___.,|     .'
 	user = user[:len(user)-1]
 	s.mu.Lock()
 	s.chat[string(user)] = conn
+	fmt.Println(s.chat)
 	s.mu.Unlock()
 	s.msgch <- fmt.Sprintf("%s has joined the chat\n", user)
 	return string(user), nil
