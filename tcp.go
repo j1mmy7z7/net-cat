@@ -133,7 +133,6 @@ _)      \.___.,|     .'
 	user = user[:len(user)-1]
 	s.mu.Lock()
 	s.chat[string(user)] = conn
-	fmt.Println(s.chat)
 	s.mu.Unlock()
 	s.msgch <- fmt.Sprintf("%s has joined the chat\n", user)
 	return string(user), nil
