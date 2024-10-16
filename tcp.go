@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"net"
@@ -41,7 +42,7 @@ func (s *Server) Start() {
 	go s.handlemessages()
 
 	for {
-		conn, err := s.ln.Accept()
+		conn, err := s.listen.Accept()
 		if err != nil {
 			log.Printf("Failed to accept connection: %v", err)
 			continue
@@ -156,4 +157,43 @@ func (s *Server) readLoop(conn net.Conn, user string) {
 func main() {
 	server := NewServer(":8081")
 	server.Start()
+}
+
+func (s *Server) getUserName(conn net.Conn) string {
+	conn.Write([]byte("Enter your name:"))
+	scanner := bufio.NewReader(conn)
+	name, err := scanner.ReadString('\n')
+	if err != nil || strings.TrimSpace(name) == "" {
+		conn.Close()
+		return ""
+	}
+	name = strings.TrimSpace(name)
+	s.userMutex.Lock()
+	s.users[conn] = Client{conn, name}
+	s.userMutex.Unlock()
+
+	s.notifyClients(fmt.Sprintf("%s has left the group", name), conn)
+	return name
+}
+
+func (s *Server) previousMessages(conn net.Conn) {
+	s.userMutex.Lock()
+	for _, message := range s.prevMessages {
+		conn.Write(([]byte(message + "\n")))
+	}
+	s.userMutex.Unlock()
+}
+
+
+func (s *Server) handleMess(){
+	for message := range s.msgch {
+		s.prevMessages = append(s.prevMessages, message.from)
+		s.userMutex.Lock()
+		formattedMessage, senderConn := message.from, message.payload
+		for conn, client := range s.users {
+			if conn !=  {
+				client.conn.Write([]byte(formattedMessage + "\n"))
+			}
+		}
+	}
 }
