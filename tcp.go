@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
+	"strings"
 	"time"
+
 	//"strings"
 	"sync"
 )
@@ -42,7 +45,7 @@ func (s *Server) Start() {
 	go s.handlemessages()
 
 	for {
-		conn, err := s.listen.Accept()
+		conn, err := s.ln.Accept()
 		if err != nil {
 			log.Printf("Failed to accept connection: %v", err)
 			continue
@@ -107,24 +110,21 @@ func (s *Server) gethistory(msg string) {
 
 func Welcome(conn net.Conn, s *Server) (string, error) {
 	buf := make([]byte, 256)
-	penguin := `Welcome to TCP-Chat!
-         _nnnn_
-        dGGGGMMb
-       @p~qp~~qMb
-       M|@||@) M|
-       @,----.JM|
-      JS^\__/  qKL
-     dZP        qKRb
-    dZP          qKKb
-   fZP            SMMb
-   HZM            MMMM
-   FqM            MMMM
- __| ".        |\dS"qML
- |    ` + "`" + `.       | ` + "`" + `' \Zq
-_)      \.___.,|     .'
-\____   )MMMMMP|   .'
-     ` + "`" + `-'       ` + "`" + `--'`
-	fmt.Fprintf(conn, penguin+"\n")
+
+	var penguin strings.Builder
+
+	file, err := os.Open("penguin.txt")
+	if err != nil {
+		log.Println(err)
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		penguin.WriteString(scanner.Text() + "\n")
+	}
+
+	fmt.Fprintf(conn, penguin.String()+"\n")
 	fmt.Fprintf(conn, "[ENTER YOUR NAME]: ")
 	name, err := conn.Read(buf)
 	if err != nil {
@@ -157,43 +157,4 @@ func (s *Server) readLoop(conn net.Conn, user string) {
 func main() {
 	server := NewServer(":8081")
 	server.Start()
-}
-
-func (s *Server) getUserName(conn net.Conn) string {
-	conn.Write([]byte("Enter your name:"))
-	scanner := bufio.NewReader(conn)
-	name, err := scanner.ReadString('\n')
-	if err != nil || strings.TrimSpace(name) == "" {
-		conn.Close()
-		return ""
-	}
-	name = strings.TrimSpace(name)
-	s.userMutex.Lock()
-	s.users[conn] = Client{conn, name}
-	s.userMutex.Unlock()
-
-	s.notifyClients(fmt.Sprintf("%s has left the group", name), conn)
-	return name
-}
-
-func (s *Server) previousMessages(conn net.Conn) {
-	s.userMutex.Lock()
-	for _, message := range s.prevMessages {
-		conn.Write(([]byte(message + "\n")))
-	}
-	s.userMutex.Unlock()
-}
-
-
-func (s *Server) handleMess(){
-	for message := range s.msgch {
-		s.prevMessages = append(s.prevMessages, message.from)
-		s.userMutex.Lock()
-		formattedMessage, senderConn := message.from, message.payload
-		for conn, client := range s.users {
-			if conn !=  {
-				client.conn.Write([]byte(formattedMessage + "\n"))
-			}
-		}
-	}
 }
