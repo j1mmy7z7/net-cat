@@ -93,6 +93,9 @@ func (s *Server) broadcastMessage(msg string) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
+	// Log the message before broadcasting
+	logMessage(msg)
+
 	for key := range s.chat {
 		s.chat[key].Write([]byte(msg))
 	}
@@ -154,6 +157,8 @@ func (s *Server) readLoop(conn net.Conn, user string) {
 }
 
 func main() {
+	// close the log file
+	defer closeLogFile()
 	server := NewServer(":8081")
 	server.Start()
 }
