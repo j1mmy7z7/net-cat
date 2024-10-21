@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -155,6 +156,19 @@ func (s *Server) readLoop(conn net.Conn, user string) {
 }
 
 func main() {
-	server := NewServer(":8081")
+	defaultPort := "8989"
+
+	port := defaultPort
+	if len(os.Args) > 1 {
+		port = os.Args[1]
+	}
+
+	if _, err := strconv.Atoi(port); err != nil {
+		fmt.Printf("Invalid port number: %v", err)
+	}
+
+
+	log.Printf("Starting server on port %s...", port)
+	server := NewServer(":" + port)
 	server.Start()
 }
