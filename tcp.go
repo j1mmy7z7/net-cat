@@ -98,6 +98,9 @@ func (s *Server) broadcastMessage(msg string) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
+	// Log the message before broadcasting
+	logMessage(msg)
+
 	for key := range s.chat {
 		s.chat[key].Write([]byte(msg))
 	}
