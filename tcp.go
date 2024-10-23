@@ -153,6 +153,16 @@ func (s *Server) readLoop(conn net.Conn, user string) {
 			s.quit <- user
 			break
 		}
+
+		message := strings.TrimSpace(string(buf[:n]))
+
+		if message == "/q" {
+			s.msgch <- fmt.Sprintf("%s has left the chat\n", user)
+			s.quit <- user
+			break
+		}
+
+
 		now := time.Now()
 		s.msgch <- fmt.Sprintf("[%s][%s]:%s", now.Format("2006-01-02 15:04:05"), user, string(buf[:n]))
 	}
