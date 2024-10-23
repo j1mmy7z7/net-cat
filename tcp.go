@@ -198,5 +198,7 @@ func main() {
 
 	log.Printf("Starting server on port %s...", port)
 	server := NewServer(":" + port)
+	defer close(server.msgch)
+	defer close(server.quit)
 	server.Start()
 }
