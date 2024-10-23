@@ -14,10 +14,14 @@ import (
 	"sync"
 )
 
+type client struct {
+	Username string
+	message string
+}
 type Server struct {
 	listenAddr string
 	ln         net.Listener
-	msgch      chan string
+	msgch      chan client
 	quit       chan string
 	chat       map[string]net.Conn
 	history    []string
@@ -27,7 +31,7 @@ type Server struct {
 func NewServer(listenAddr string) *Server {
 	return &Server{
 		listenAddr: listenAddr,
-		msgch:      make(chan string, 10),
+		msgch:      make(chan client, 10),
 		chat:       make(map[string]net.Conn),
 		quit:       make(chan string, 10),
 		history:    make([]string, 0),
@@ -73,9 +77,9 @@ func (s *Server) handleConnection(conn net.Conn) {
 }
 
 func (s *Server) handlemessages() {
-	for msg := range s.msgch {
-		s.broadcastMessage(msg)
-		s.gethistory(msg)
+	for sender := range s.msgch {
+		s.broadcastMessage(sender)
+		s.gethistory(sender.message)
 	}
 }
 
@@ -94,15 +98,17 @@ func (s *Server) update(conn net.Conn) {
 	}
 }
 
-func (s *Server) broadcastMessage(msg string) {
+func (s *Server) broadcastMessage(sender client) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	// Log the message before broadcasting
-	logMessage(msg)
+	logMessage(sender.message)
 
 	for key := range s.chat {
-		s.chat[key].Write([]byte(msg))
+		if key != sender.Username {
+			s.chat[key].Write([]byte(sender.message))
+		}
 	}
 }
 
@@ -112,7 +118,7 @@ func (s *Server) gethistory(msg string) {
 	s.history = append(s.history, msg)
 }
 
-func Welcome(conn net.Conn, s *Server) (string, error) {
+func Welcome(conn net.Conn, s *Server) (*client, error) {
 	buf := make([]byte, 256)
 
 	var penguin strings.Builder
@@ -132,39 +138,48 @@ func Welcome(conn net.Conn, s *Server) (string, error) {
 	fmt.Fprintf(conn, "[ENTER YOUR NAME]: ")
 	name, err := conn.Read(buf)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	user := buf[:name]
 	user = user[:len(user)-1]
+	New_client := &client{Username: string(user), message: fmt.Sprintf("%s has joined the chat\n", user)}
 	s.mu.Lock()
-	s.chat[string(user)] = conn
+	s.chat[string(New_client.Username)] = conn
 	s.mu.Unlock()
-	s.msgch <- fmt.Sprintf("%s has joined the chat\n", user)
-	return string(user), nil
+	s.msgch <- *New_client
+	return New_client, nil
 }
 
-func (s *Server) readLoop(conn net.Conn, user string) {
+func (s *Server) readLoop(conn net.Conn, user *client) {
 	defer conn.Close()
 	buf := make([]byte, 2048)
 	for {
 		n, err := conn.Read(buf)
 		if err != nil {
-			s.msgch <- fmt.Sprintf("%s has left the chat\n", user)
-			s.quit <- user
+			user.message = fmt.Sprintf("%s has left the chat\n", user.Username) 
+			s.msgch <- *user
+			s.quit <- user.Username
 			break
 		}
-
+		conn.Write([]byte("\x1b[1A"))
+		conn.Write([]byte("\x1b[2K"))
 		message := strings.TrimSpace(string(buf[:n]))
+		if message == ""{
+			continue
+		}
 
-		if message == "/q" {
-			s.msgch <- fmt.Sprintf("%s has left the chat\n", user)
-			s.quit <- user
+		if message == "/Q" {
+			user.message = fmt.Sprintf("%s has left the chat\n", user.Username) 
+			s.msgch <- *user
+			s.quit <- user.Username
 			break
 		}
 
 
 		now := time.Now()
-		s.msgch <- fmt.Sprintf("[%s][%s]:%s", now.Format("2006-01-02 15:04:05"), user, string(buf[:n]))
+		user.message = fmt.Sprintf("[%s][%s]:%s", now.Format("2006-01-02 15:04:05"), user.Username, string(buf[:n])) 
+		conn.Write([]byte(user.message))
+		s.msgch <- *user
 	}
 }
 
