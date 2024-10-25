@@ -28,6 +28,10 @@ type Server struct {
 	mu         sync.RWMutex
 }
 
+
+// NewServer creates a new instance of the Server struct.//+
+// It initializes the server with the provided listen address and sets up necessary channels and data structures.
+// listenAddr: The address on which the server will listen for incoming connections./
 func NewServer(listenAddr string) *Server {
 	return &Server{
 		listenAddr: listenAddr,
@@ -39,6 +43,9 @@ func NewServer(listenAddr string) *Server {
 	}
 }
 
+// Start begins listening for incoming TCP connections on the server's address.
+// It initializes the listener and continuously accepts new connections.
+// Each connection is handled concurrently in a separate goroutine.
 func (s *Server) Start() {
 	ln, err := net.Listen("tcp", s.listenAddr)
 	if err != nil {
@@ -59,6 +66,11 @@ func (s *Server) Start() {
 	}
 }
 
+// handleConnection manages a new client connection to the server.
+// It performs initial setup, updates the client with chat history,
+// and starts a read loop to handle incoming messages.
+//
+// conn: The net.Conn object representing the client's connection.
 func (s *Server) handleConnection(conn net.Conn) {
 	defer conn.Close()
 	if len(s.chat) < 10 {
