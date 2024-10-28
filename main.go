@@ -62,7 +62,7 @@ func (s *Server) Start() {
 			log.Printf("Failed to accept connection: %v", err)
 			continue
 		}
-		go s.handleConnection(conn)
+		go s.HandleConnection(conn)
 	}
 }
 
@@ -71,7 +71,7 @@ func (s *Server) Start() {
 // and starts a read loop to handle incoming messages.
 //
 // conn: The net.Conn object representing the client's connection.
-func (s *Server) handleConnection(conn net.Conn) {
+func (s *Server) HandleConnection(conn net.Conn) {
 	defer conn.Close()
 	if len(s.chat) < 10 {
 		name, err := Welcome(conn, s)
