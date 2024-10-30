@@ -18,8 +18,8 @@ type client struct {
 type Server struct {
 	listenAddr string
 	ln         net.Listener
-	msgch      chan client
-	quit       chan string
+	Msgch      chan client
+	Quit       chan string
 	chat       map[string]net.Conn
 	history    []string
 	mu         sync.RWMutex
@@ -32,9 +32,9 @@ type Server struct {
 func NewServer(listenAddr string) *Server {
 	return &Server{
 		listenAddr: listenAddr,
-		msgch:      make(chan client, 10),
+		Msgch:      make(chan client, 10),
 		chat:       make(map[string]net.Conn),
-		quit:       make(chan string, 10),
+		Quit:       make(chan string, 10),
 		history:    make([]string, 0),
 		mu:         sync.RWMutex{},
 	}
@@ -86,14 +86,14 @@ func (s *Server) handleConnection(conn net.Conn) {
 }
 
 func (s *Server) handlemessages() {
-	for sender := range s.msgch {
+	for sender := range s.Msgch {
 		s.broadcastMessage(sender)
 		s.gethistory(sender.message)
 	}
 }
 
 func (s *Server) removeclient() {
-	for name := range s.quit {
+	for name := range s.Quit {
 		delete(s.chat, name)
 	}
 }
@@ -155,7 +155,7 @@ func Welcome(conn net.Conn, s *Server) (*client, error) {
 	s.mu.Lock()
 	s.chat[string(New_client.Username)] = conn
 	s.mu.Unlock()
-	s.msgch <- *New_client
+	s.Msgch <- *New_client
 	return New_client, nil
 }
 
@@ -166,8 +166,8 @@ func (s *Server) readLoop(conn net.Conn, user *client) {
 		n, err := conn.Read(buf)
 		if err != nil {
 			user.message = fmt.Sprintf("%s has left the chat\n", user.Username) 
-			s.msgch <- *user
-			s.quit <- user.Username
+			s.Msgch <- *user
+			s.Quit <- user.Username
 			break
 		}
 		conn.Write([]byte("\x1b[1A"))
@@ -179,8 +179,8 @@ func (s *Server) readLoop(conn net.Conn, user *client) {
 
 		if message == "/Q" {
 			user.message = fmt.Sprintf("%s has left the chat\n", user.Username) 
-			s.msgch <- *user
-			s.quit <- user.Username
+			s.Msgch <- *user
+			s.Quit <- user.Username
 			break
 		}
 
@@ -188,6 +188,6 @@ func (s *Server) readLoop(conn net.Conn, user *client) {
 		now := time.Now()
 		user.message = fmt.Sprintf("[%s][%s]:%s", now.Format("2006-01-02 15:04:05"), user.Username, string(buf[:n])) 
 		conn.Write([]byte(user.message))
-		s.msgch <- *user
+		s.Msgch <- *user
 	}
 }
