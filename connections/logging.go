@@ -27,7 +27,7 @@ func logMessage(msg string) {
 }
 
 // close the log file before exiting the program
-func closeLogFile() {
+func CloseLogFile() {
 	if logFile != nil {
 		logFile.Close()
 	}

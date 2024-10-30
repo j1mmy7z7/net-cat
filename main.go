@@ -26,5 +26,6 @@ func main() {
 	server := net.NewServer(":" + port)
 	defer close(server.Msgch)
 	defer close(server.Quit)
+	defer net.CloseLogFile()
 	server.Start()
 }
