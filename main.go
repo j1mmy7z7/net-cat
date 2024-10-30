@@ -9,8 +9,6 @@ import (
 
 )
 
-
-
 func main() {
 	defaultPort := "8989"
 
@@ -26,5 +24,7 @@ func main() {
 
 	log.Printf("Starting server on port %s...", port)
 	server := net.NewServer(":" + port)
+	defer close(server.Msgch)
+	defer close(server.Quit)
 	server.Start()
 }
