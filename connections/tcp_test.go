@@ -1,10 +1,8 @@
-package main
+package netcat
 
 import (
 	"fmt"
-	"log"
 	"net"
-	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -14,8 +12,8 @@ import (
 func TestReadLoopHandlesDisconnectionGracefully(t *testing.T) {
 	server := &Server{
 		chat:  make(map[string]net.Conn),
-		msgch: make(chan client, 10),
-		quit:  make(chan string, 10),
+		Msgch: make(chan client, 10),
+		Quit:  make(chan string, 10),
 	}
 
 	listener, err := net.Listen("tcp", "localhost:0")
@@ -43,20 +41,20 @@ func TestReadLoopHandlesDisconnectionGracefully(t *testing.T) {
 	conn.Close()
 
 	select {
-	case quitMsg := <-server.quit:
-		if quitMsg != "testuser" {
-			t.Errorf("Expected quit message for 'testuser', got %v", quitMsg)
+	case QuitMsg := <-server.Quit:
+		if QuitMsg != "testuser" {
+			t.Errorf("Expected Quit message for 'testuser', got %v", QuitMsg)
 		}
 	case <-time.After(1 * time.Second):
-		t.Error("Expected quit message but did not receive one")
+		t.Error("Expected Quit message but did not receive one")
 	}
 }
 
 func TestReadLoopFormatsAndSendsMessageWithTimestampAndUsername(t *testing.T) {
 	server := &Server{
 		chat:  make(map[string]net.Conn),
-		msgch: make(chan client, 10),
-		quit:  make(chan string, 10),
+		Msgch: make(chan client, 10),
+		Quit:  make(chan string, 10),
 	}
 
 	listener, err := net.Listen("tcp", "localhost:0")
@@ -109,8 +107,8 @@ func TestReadLoopFormatsAndSendsMessageWithTimestampAndUsername(t *testing.T) {
 func TestReadLoopHandlesLargeMessages(t *testing.T) {
 	server := &Server{
 		chat:  make(map[string]net.Conn),
-		msgch: make(chan client, 10),
-		quit:  make(chan string, 10),
+		Msgch: make(chan client, 10),
+		Quit:  make(chan string, 10),
 	}
 
 	listener, err := net.Listen("tcp", "localhost:0")
@@ -151,129 +149,6 @@ func TestReadLoopHandlesLargeMessages(t *testing.T) {
 	// Check if the response contains the expected formatted message
 	if !strings.Contains(string(response[:n]), largeMessage) {
 		t.Errorf("Expected message to contain %q, but got %q", largeMessage, string(response[:n]))
-	}
-}
-
-func TestMainPrintsErrorMessageForNonNumericPort(t *testing.T) {
-	originalArgs := os.Args
-	defer func() { os.Args = originalArgs }()
-
-	os.Args = []string{"program", "invalidPort"}
-
-	var logOutput strings.Builder
-	log.SetOutput(&logOutput)
-	defer log.SetOutput(os.Stderr)
-
-	done := make(chan bool)
-	go func() {
-		main()
-		done <- true
-	}()
-
-	select {
-	case <-done:
-		currentTime := time.Now().Format("2006/01/02 15:04:05")
-		expectedError := fmt.Sprintf("%s Starting server on port invalidPort...\n", currentTime)
-		if !strings.Contains(logOutput.String(), expectedError) {
-			t.Errorf("Expected log to contain %q, but got %q", expectedError, logOutput.String())
-		}
-	case <-time.After(2 * time.Second):
-		t.Error("Test timed out, possible deadlock or long-running goroutine")
-	}
-}
-
-func TestMainPrintsErrorMessageForExceedingPortRange(t *testing.T) {
-	originalArgs := os.Args
-	defer func() { os.Args = originalArgs }()
-
-	os.Args = []string{"program", "70000"}
-
-	var logOutput strings.Builder
-	log.SetOutput(&logOutput)
-	defer log.SetOutput(os.Stderr)
-
-	done := make(chan bool)
-	go func() {
-		main()
-		done <- true
-	}()
-
-	select {
-	case <-done:
-		currentTime := time.Now().Format("2006/01/02 15:04:05")
-
-		expectedError := fmt.Sprintf("%s Starting server on port Invalid Port...\n", currentTime)
-		if !strings.Contains(logOutput.String(), expectedError) {
-			t.Errorf("Expected log to contain %q, but got %q", expectedError, logOutput.String())
-		}
-	case <-time.After(2 * time.Second):
-		t.Error("Test timed out, possible deadlock or long-running goroutine")
-	}
-}
-
-func TestMainLogsServerStartMessageWithCorrectPort(t *testing.T) {
-	originalArgs := os.Args
-	defer func() { os.Args = originalArgs }()
-
-	port := "12345"
-	os.Args = []string{"program", port}
-
-	var logOutput strings.Builder
-	log.SetOutput(&logOutput)
-	defer log.SetOutput(os.Stderr)
-
-	done := make(chan bool)
-	go func() {
-		main()
-		done <- true
-	}()
-
-	select {
-	case <-done:
-		t.Error("Expected server to run indefinitely, but it returned")
-	case <-time.After(1 * time.Second):
-		expectedLogMessage := fmt.Sprintf("Starting server on port %s...", port)
-		if !strings.Contains(logOutput.String(), expectedLogMessage) {
-			t.Errorf("Expected log to contain %q, but got %q", expectedLogMessage, logOutput.String())
-		}
-		// Simulate server shutdown
-		os.Args = []string{"program", "stop"}
-	}
-}
-
-func TestMainHandlesPortAlreadyInUse(t *testing.T) {
-	originalArgs := os.Args
-	defer func() { os.Args = originalArgs }()
-
-	// Use a valid port number
-	port := "8080"
-	os.Args = []string{"program", port}
-
-	// Start a listener on the same port to simulate "port already in use"
-	listener, err := net.Listen("tcp", ":"+port)
-	if err != nil {
-		t.Fatalf("Failed to listen on port %s: %v", port, err)
-	}
-	defer listener.Close()
-
-	var logOutput strings.Builder
-	log.SetOutput(&logOutput)
-	defer log.SetOutput(os.Stderr)
-
-	done := make(chan bool)
-	go func() {
-		main()
-		done <- true
-	}()
-
-	select {
-	case <-done:
-		expectedLogMessage := fmt.Sprintf("Starting server on port %s...", port)
-		if !strings.Contains(logOutput.String(), expectedLogMessage) {
-			t.Errorf("Expected log to contain %q, but got %q", expectedLogMessage, logOutput.String())
-		}
-	case <-time.After(1 * time.Second):
-		t.Error("Expected server to handle port already in use and terminate, but it did not")
 	}
 }
 
@@ -320,8 +195,8 @@ func TestGetHistoryAppendsMultipleMessagesInOrder(t *testing.T) {
 func TestBroadcastMessageDoesNotWriteToClosedConnection(t *testing.T) {
 	server := &Server{
 		chat:  make(map[string]net.Conn),
-		msgch: make(chan client, 10),
-		quit:  make(chan string, 10),
+		Msgch: make(chan client, 10),
+		Quit:  make(chan string, 10),
 		mu:    sync.RWMutex{},
 	}
 
@@ -365,8 +240,8 @@ func TestBroadcastMessageDoesNotWriteToClosedConnection(t *testing.T) {
 func TestHandleConnectionAtCapacityLimit(t *testing.T) {
 	server := &Server{
 		chat:  make(map[string]net.Conn),
-		msgch: make(chan client, 10),
-		quit:  make(chan string, 10),
+		Msgch: make(chan client, 10),
+		Quit:  make(chan string, 10),
 	}
 
 	// Fill the chat map to its capacity limit
@@ -388,7 +263,7 @@ func TestHandleConnectionAtCapacityLimit(t *testing.T) {
 		conn, _ := listener.Accept()
 		defer conn.Close()
 
-		server.HandleConnection(conn)
+		server.handleConnection(conn)
 	}()
 
 	conn, err := net.Dial("tcp", listener.Addr().String())
@@ -422,9 +297,9 @@ func TestNewServerCreatesServerWithCorrectListenAddress(t *testing.T) {
 func TestServerStartHandlesInvalidAddress(t *testing.T) {
 	server := &Server{
 		listenAddr: "invalid-address",
-		msgch:      make(chan client, 10),
+		Msgch:      make(chan client, 10),
 		chat:       make(map[string]net.Conn),
-		quit:       make(chan string, 10),
+		Quit:       make(chan string, 10),
 		history:    make([]string, 0),
 		mu:         sync.RWMutex{},
 	}
@@ -447,7 +322,7 @@ func TestServerStartHandlesInvalidAddress(t *testing.T) {
 func TestRemoveClient(t *testing.T) {
 	server := &Server{
 		chat: make(map[string]net.Conn),
-		quit: make(chan string, 10),
+		Quit: make(chan string, 10),
 	}
 
 	// Simulate a client connection
@@ -459,8 +334,8 @@ func TestRemoveClient(t *testing.T) {
 	username := "testuser"
 	server.chat[username] = serverConn
 
-	// Send the username to the quit channel
-	server.quit <- username
+	// Send the username to the Quit channel
+	server.Quit <- username
 
 	// Run removeclient in a separate goroutine
 	go server.removeclient()

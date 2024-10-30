@@ -1,5 +1,5 @@
 // Log file path is invalid or inaccessible
-package main
+package netcat
 
 import (
 	"os"
