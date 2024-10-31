@@ -8,7 +8,7 @@ import (
 var logFile *os.File
 
 // Open a new log file for appending
-func Init() {
+func init() {
 	var err error
 	logFile, err = os.OpenFile("chat.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
