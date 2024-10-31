@@ -9,7 +9,7 @@ import (
 // No error occurs when opening the log file
 func TestNoErrorOpeningLogFile(t *testing.T) {
 	// Call the Init function to open the log file
-	Init()
+	// init()
 
 	// Check if the log file was opened successfully
 	if _, err := os.Stat("chat.log"); err != nil {

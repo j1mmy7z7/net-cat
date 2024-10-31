@@ -13,7 +13,7 @@ import (
 
 type client struct {
 	Username string
-	message string
+	message  string
 }
 type Server struct {
 	listenAddr string
@@ -24,7 +24,6 @@ type Server struct {
 	history    []string
 	mu         sync.RWMutex
 }
-
 
 // NewServer creates a new instance of the Server struct.//+
 // It initializes the server with the provided listen address and sets up necessary channels and data structures.
@@ -165,7 +164,7 @@ func (s *Server) readLoop(conn net.Conn, user *client) {
 	for {
 		n, err := conn.Read(buf)
 		if err != nil {
-			user.message = fmt.Sprintf("%s has left the chat\n", user.Username) 
+			user.message = fmt.Sprintf("%s has left the chat\n", user.Username)
 			s.Msgch <- *user
 			s.Quit <- user.Username
 			break
@@ -173,20 +172,19 @@ func (s *Server) readLoop(conn net.Conn, user *client) {
 		conn.Write([]byte("\x1b[1A"))
 		conn.Write([]byte("\x1b[2K"))
 		message := strings.TrimSpace(string(buf[:n]))
-		if message == ""{
+		if message == "" {
 			continue
 		}
 
 		if message == "/Q" {
-			user.message = fmt.Sprintf("%s has left the chat\n", user.Username) 
+			user.message = fmt.Sprintf("%s has left the chat\n", user.Username)
 			s.Msgch <- *user
 			s.Quit <- user.Username
 			break
 		}
 
-
 		now := time.Now()
-		user.message = fmt.Sprintf("[%s][%s]:%s", now.Format("2006-01-02 15:04:05"), user.Username, string(buf[:n])) 
+		user.message = fmt.Sprintf("[%s][%s]:%s", now.Format("2006-01-02 15:04:05"), user.Username, string(buf[:n]))
 		conn.Write([]byte(user.message))
 		s.Msgch <- *user
 	}

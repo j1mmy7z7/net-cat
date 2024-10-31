@@ -5,36 +5,36 @@ import (
 	"log"
 	"os"
 	"strconv"
-	net "netcat/connections"
 
+	net "netcat/connections"
 )
 
 func main() {
 	var port string
 
-
 	Args := os.Args[1:]
 
-	if len(Args) == 0 {
-		port = "8989"
-	} else if len(Args) == 1 {
-		port = Args[0]
-	} else {
+	if len(Args) > 1 {
 		fmt.Println("[USAGE]: ./TCPChat $port")
 		return
 	}
+	if len(Args) == 1 {
+		port = Args[0]
+	}
+	if len(Args) == 0 {
+		port = "8989"
+	}
 
-	checker , err := strconv.Atoi(port); 
+	checker, err := strconv.Atoi(port)
 	if err != nil {
 		fmt.Printf("Invalid port number: %v", err)
 		return
 	}
-	
+
 	if checker < 0 || checker > 65535 {
 		fmt.Println("Enter a valid port number between 0 - 65535")
 		return
 	}
-
 
 	log.Printf("Starting server on port %s...", port)
 	server := net.NewServer(":" + port)
