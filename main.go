@@ -4,24 +4,29 @@ import (
 	"fmt"
 	"log"
 	"os"
+
 	"strconv"
 
 	net "netcat/connections"
 )
 
+func isValidPort(port int) bool {
+	return port >= 0 && port <= 65535
+}
+
 func main() {
 	var port string
 
-	Args := os.Args[1:]
+	args := os.Args[1:]
 
-	if len(Args) > 1 {
+	if len(args) > 1 {
 		fmt.Println("[USAGE]: ./TCPChat $port")
 		return
 	}
-	if len(Args) == 1 {
-		port = Args[0]
+	if len(args) == 1 {
+		port = args[0]
 	}
-	if len(Args) == 0 {
+	if len(args) == 0 {
 		port = "8989"
 	}
 
@@ -31,9 +36,9 @@ func main() {
 		return
 	}
 
-	if checker < 0 || checker > 65535 {
-		fmt.Println("Enter a valid port number between 0 - 65535")
-		return
+	if !isValidPort(checker) {
+		log.Fatal("Enter a valid port number between 0 - 65535")
+
 	}
 
 	log.Printf("Starting server on port %s...", port)
