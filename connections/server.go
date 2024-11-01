@@ -17,7 +17,7 @@ type client struct {
 }
 type Server struct {
 	listenAddr string
-	ln         net.Listener
+	listener   net.Listener
 	Msgch      chan client
 	Quit       chan string
 	chat       map[string]net.Conn
@@ -42,23 +42,23 @@ func NewServer(listenAddr string) *Server {
 // Start begins listening for incoming TCP connections on the server's address.
 // It initializes the listener and continuously accepts new connections.
 // Each connection is handled concurrently in a separate goroutine.
-func (s *Server) Start() {
-	ln, err := net.Listen("tcp", s.listenAddr)
+func (server *Server) Start() {
+	listener, err := net.Listen("tcp", server.listenAddr)
 	if err != nil {
-		return
+		log.Fatal(err)
 	}
-	defer ln.Close()
-	s.ln = ln
+	defer listener.Close()
+	server.listener = listener
 
-	go s.handlemessages()
+	go server.handlemessages()
 
 	for {
-		conn, err := s.ln.Accept()
+		conn, err := server.listener.Accept()
 		if err != nil {
 			log.Printf("Failed to accept connection: %v", err)
 			continue
 		}
-		go s.handleConnection(conn)
+		go server.handleConnection(conn)
 	}
 }
 
@@ -67,27 +67,27 @@ func (s *Server) Start() {
 // and starts a read loop to handle incoming messages.
 //
 // conn: The net.Conn object representing the client's connection.
-func (s *Server) handleConnection(conn net.Conn) {
+func (server *Server) handleConnection(conn net.Conn) {
 	defer conn.Close()
-	if len(s.chat) < 10 {
-		name, err := Welcome(conn, s)
+	if len(server.chat) < 10 {
+		name, err := Welcome(conn, server)
 		if err != nil {
 			conn.Write([]byte("An error occured while setting you up"))
 			return
 		}
-		s.update(conn)
-		s.readLoop(conn, name)
-		s.removeclient()
+		server.update(conn)
+		server.readLoop(conn, name)
+		server.removeclient()
 	} else {
 		conn.Write([]byte("The chat is full try another time"))
-		conn.Close()
+		// conn.Close()
 	}
 }
 
-func (s *Server) handlemessages() {
-	for sender := range s.Msgch {
-		s.broadcastMessage(sender)
-		s.gethistory(sender.message)
+func (server *Server) handlemessages() {
+	for sender := range server.Msgch {
+		server.broadcastMessage(sender)
+		server.gethistory(sender.message)
 	}
 }
 
@@ -106,34 +106,35 @@ func (s *Server) update(conn net.Conn) {
 	}
 }
 
-func (s *Server) broadcastMessage(sender client) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+func (server *Server) broadcastMessage(sender client) {
+	server.mu.RLock()
+	defer server.mu.RUnlock()
 
 	// Log the message before broadcasting
 	logMessage(sender.message)
 
-	for key := range s.chat {
+	for key := range server.chat {
 		if key != sender.Username {
-			s.chat[key].Write([]byte(sender.message))
+			server.chat[key].Write([]byte(sender.message))
 		}
 	}
 }
 
-func (s *Server) gethistory(msg string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.history = append(s.history, msg)
+func (server *Server) gethistory(msg string) {
+	server.mu.Lock()
+	defer server.mu.Unlock()
+	server.history = append(server.history, msg)
 }
 
-func Welcome(conn net.Conn, s *Server) (*client, error) {
+func Welcome(conn net.Conn, server *Server) (*client, error) {
 	buf := make([]byte, 256)
 
 	var penguin strings.Builder
 
 	file, err := os.Open("penguin.txt")
 	if err != nil {
-		log.Println(err)
+		log.Fatal(err)
+
 	}
 	defer file.Close()
 
@@ -151,10 +152,10 @@ func Welcome(conn net.Conn, s *Server) (*client, error) {
 	user := buf[:name]
 	user = user[:len(user)-1]
 	New_client := &client{Username: string(user), message: fmt.Sprintf("%s has joined the chat\n", user)}
-	s.mu.Lock()
-	s.chat[string(New_client.Username)] = conn
-	s.mu.Unlock()
-	s.Msgch <- *New_client
+	server.mu.Lock()
+	server.chat[New_client.Username] = conn
+	server.mu.Unlock()
+	server.Msgch <- *New_client
 	return New_client, nil
 }
 
