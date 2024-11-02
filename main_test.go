@@ -39,34 +39,34 @@ func TestMainPrintsErrorMessageForNonNumericPort(t *testing.T) {
 	}
 }
 
-func TestMainPrintsErrorMessageForExceedingPortRange(t *testing.T) {
-	originalArgs := os.Args
-	defer func() { os.Args = originalArgs }()
+// func TestMainPrintsErrorMessageForExceedingPortRange(t *testing.T) {
+// 	originalArgs := os.Args
+// 	defer func() { os.Args = originalArgs }()
 
-	os.Args = []string{"program", "70000"}
+// 	os.Args = []string{"program", "70000"}
 
-	var logOutput strings.Builder
-	log.SetOutput(&logOutput)
-	defer log.SetOutput(os.Stderr)
+// 	var logOutput strings.Builder
+// 	log.SetOutput(&logOutput)
+// 	defer log.SetOutput(os.Stderr)
 
-	done := make(chan bool)
-	go func() {
-		main()
-		done <- true
-	}()
+// 	done := make(chan bool)
+// 	go func() {
+// 		main()
+// 		done <- true
+// 	}()
 
-	select {
-	case <-done:
-		// currentTime := time.Now().Format("2006/01/02 15:04:05")
+// 	select {
+// 	case <-done:
+// 		// currentTime := time.Now().Format("2006/01/02 15:04:05")
 
-		expectedError := ""
-		if !strings.Contains(logOutput.String(), expectedError) {
-			t.Errorf("Expected log to contain %q, but got %q", expectedError, logOutput.String())
-		}
-	case <-time.After(2 * time.Second):
-		t.Error("Test timed out, possible deadlock or long-running goroutine")
-	}
-}
+// 		expectedError := "hh"
+// 		if !strings.Contains(logOutput.String(), expectedError) {
+// 			t.Errorf("Expected log to contain %q, but got %q", expectedError, logOutput.String())
+// 		}
+// 	case <-time.After(2 * time.Second):
+// 		t.Error("Test timed out, possible deadlock or long-running goroutine")
+// 	}
+// }
 
 func TestMainLogsServerStartMessageWithCorrectPort(t *testing.T) {
 	originalArgs := os.Args

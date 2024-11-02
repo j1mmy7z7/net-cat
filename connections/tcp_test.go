@@ -12,7 +12,7 @@ import (
 func TestReadLoopHandlesDisconnectionGracefully(t *testing.T) {
 	server := &Server{
 		chat:  make(map[string]net.Conn),
-		Msgch: make(chan client, 10),
+		Msgch: make(chan Client, 10),
 		Quit:  make(chan string, 10),
 	}
 
@@ -26,7 +26,7 @@ func TestReadLoopHandlesDisconnectionGracefully(t *testing.T) {
 		conn, _ := listener.Accept()
 		defer conn.Close()
 
-		user := &client{Username: "testuser"}
+		user := &Client{Username: "testuser"}
 		server.chat[user.Username] = conn
 		server.readLoop(conn, user)
 	}()
@@ -37,7 +37,7 @@ func TestReadLoopHandlesDisconnectionGracefully(t *testing.T) {
 	}
 	defer conn.Close()
 
-	// Simulate client disconnection by closing the connection
+	// Simulate Client disconnection by closing the connection
 	conn.Close()
 
 	select {
@@ -53,7 +53,7 @@ func TestReadLoopHandlesDisconnectionGracefully(t *testing.T) {
 func TestReadLoopFormatsAndSendsMessageWithTimestampAndUsername(t *testing.T) {
 	server := &Server{
 		chat:  make(map[string]net.Conn),
-		Msgch: make(chan client, 10),
+		Msgch: make(chan Client, 10),
 		Quit:  make(chan string, 10),
 	}
 
@@ -67,7 +67,7 @@ func TestReadLoopFormatsAndSendsMessageWithTimestampAndUsername(t *testing.T) {
 		conn, _ := listener.Accept()
 		defer conn.Close()
 
-		user := &client{Username: "testuser"}
+		user := &Client{Username: "testuser"}
 		server.chat[user.Username] = conn
 		server.readLoop(conn, user)
 	}()
@@ -107,7 +107,7 @@ func TestReadLoopFormatsAndSendsMessageWithTimestampAndUsername(t *testing.T) {
 func TestReadLoopHandlesLargeMessages(t *testing.T) {
 	server := &Server{
 		chat:  make(map[string]net.Conn),
-		Msgch: make(chan client, 10),
+		Msgch: make(chan Client, 10),
 		Quit:  make(chan string, 10),
 	}
 
@@ -121,7 +121,7 @@ func TestReadLoopHandlesLargeMessages(t *testing.T) {
 		conn, _ := listener.Accept()
 		defer conn.Close()
 
-		user := &client{Username: "testuser"}
+		user := &Client{Username: "testuser"}
 		server.chat[user.Username] = conn
 		server.readLoop(conn, user)
 	}()
@@ -195,7 +195,7 @@ func TestGetHistoryAppendsMultipleMessagesInOrder(t *testing.T) {
 func TestBroadcastMessageDoesNotWriteToClosedConnection(t *testing.T) {
 	server := &Server{
 		chat:  make(map[string]net.Conn),
-		Msgch: make(chan client, 10),
+		Msgch: make(chan Client, 10),
 		Quit:  make(chan string, 10),
 		mu:    sync.RWMutex{},
 	}
@@ -211,7 +211,7 @@ func TestBroadcastMessageDoesNotWriteToClosedConnection(t *testing.T) {
 		conn, _ := listener.Accept()
 		defer conn.Close()
 
-		user := &client{Username: "testuser"}
+		user := &Client{Username: "testuser"}
 		server.chat[user.Username] = conn
 	}()
 
@@ -221,13 +221,13 @@ func TestBroadcastMessageDoesNotWriteToClosedConnection(t *testing.T) {
 	}
 	defer conn.Close()
 
-	// Add another client with a closed connection
+	// Add another Client with a closed connection
 	closedConn, _ := net.Pipe()
 	closedConn.Close()
 	server.chat["closeduser"] = closedConn
 
 	// Broadcast a message
-	sender := client{Username: "testuser", message: "Hello, world!"}
+	sender := Client{Username: "testuser", message: "Hello, world!"}
 	server.broadcastMessage(sender)
 
 	// Check that the closed connection did not receive any message
@@ -240,14 +240,14 @@ func TestBroadcastMessageDoesNotWriteToClosedConnection(t *testing.T) {
 func TestHandleConnectionAtCapacityLimit(t *testing.T) {
 	server := &Server{
 		chat:  make(map[string]net.Conn),
-		Msgch: make(chan client, 10),
+		Msgch: make(chan Client, 10),
 		Quit:  make(chan string, 10),
 	}
 
 	// Fill the chat map to its capacity limit
 	for i := 0; i < 10; i++ {
-		clientConn, serverConn := net.Pipe()
-		defer clientConn.Close()
+		ClientConn, serverConn := net.Pipe()
+		defer ClientConn.Close()
 		defer serverConn.Close()
 		server.chat[fmt.Sprintf("user%d", i)] = serverConn
 	}
@@ -297,7 +297,7 @@ func TestNewServerCreatesServerWithCorrectListenAddress(t *testing.T) {
 func TestServerStartHandlesInvalidAddress(t *testing.T) {
 	server := &Server{
 		listenAddr: "invalid-address",
-		Msgch:      make(chan client, 10),
+		Msgch:      make(chan Client, 10),
 		chat:       make(map[string]net.Conn),
 		Quit:       make(chan string, 10),
 		history:    make([]string, 0),
@@ -325,27 +325,27 @@ func TestRemoveClient(t *testing.T) {
 		Quit: make(chan string, 10),
 	}
 
-	// Simulate a client connection
-	clientConn, serverConn := net.Pipe()
-	defer clientConn.Close()
+	// Simulate a Client connection
+	ClientConn, serverConn := net.Pipe()
+	defer ClientConn.Close()
 	defer serverConn.Close()
 
-	// Add a client to the chat map
+	// Add a Client to the chat map
 	username := "testuser"
 	server.chat[username] = serverConn
 
 	// Send the username to the Quit channel
 	server.Quit <- username
 
-	// Run removeclient in a separate goroutine
-	go server.removeclient()
+	// Run removeClient in a separate goroutine
+	go server.removeClient()
 
 	// Allow some time for the goroutine to process
 	time.Sleep(100 * time.Millisecond)
 
-	// Check if the client was removed from the chat map
+	// Check if the Client was removed from the chat map
 	if _, exists := server.chat[username]; exists {
-		t.Errorf("Expected client %q to be removed from chat map, but it still exists", username)
+		t.Errorf("Expected Client %q to be removed from chat map, but it still exists", username)
 	}
 }
 
@@ -356,16 +356,16 @@ func TestUpdateWritesAllHistoryMessagesToConnection(t *testing.T) {
 	}
 
 	// Create a pipe to simulate a network connection
-	clientConn, serverConn := net.Pipe()
-	defer clientConn.Close()
+	ClientConn, serverConn := net.Pipe()
+	defer ClientConn.Close()
 	defer serverConn.Close()
 
 	// Run the update function
 	go server.update(serverConn)
 
-	// Read from the client side of the pipe
+	// Read from the Client side of the pipe
 	response := make([]byte, 1024)
-	n, err := clientConn.Read(response)
+	n, err := ClientConn.Read(response)
 	if err != nil {
 		t.Fatalf("Failed to read from connection: %v", err)
 	}
